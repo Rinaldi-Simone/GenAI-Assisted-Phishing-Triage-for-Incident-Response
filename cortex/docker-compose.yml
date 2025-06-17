@@ -1,0 +1,25 @@
+services:
+  elasticsearch:
+    image: elasticsearch:8.18.2
+    environment:
+      - http.host=0.0.0.0
+      - discovery.type=single-node
+      - script.allowed_types=inline
+      - thread_pool.search.queue_size=100000
+      - thread_pool.write.queue_size=10000
+      - xpack.security.enabled=false
+    volumes:
+      - ./elasticsearch/data:/usr/share/elasticsearch/data
+  cortex:
+    image: thehiveproject/cortex
+    environment:
+      - docker_job_directory=${job_directory}
+      - job_directory=${job_directory}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./application.conf:/etc/cortex/application.conf
+      - ${job_directory}:${job_directory}
+    depends_on:
+      - elasticsearch
+    ports:
+      - "0.0.0.0:9001:9001"
