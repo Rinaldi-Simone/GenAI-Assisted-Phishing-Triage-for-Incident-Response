@@ -10,6 +10,9 @@ services:
       - xpack.security.enabled=false
     volumes:
       - ./elasticsearch/data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+
   cortex:
     image: thehiveproject/cortex
     environment:
@@ -23,3 +26,17 @@ services:
       - elasticsearch
     ports:
       - "0.0.0.0:9001:9001"
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: n8n
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+    depends_on:
+      - cortex
+
+volumes:
+  n8n_data:
