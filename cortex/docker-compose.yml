@@ -28,11 +28,14 @@ services:
       - "0.0.0.0:9001:9001"
 
   n8n:
+    build: .
     image: docker.n8n.io/n8nio/n8n
     container_name: n8n
     ports:
       - "5678:5678"
     volumes:
+      - ../scripts:/scripts
+      - ../email_phishing:/data/eml
       - n8n_data:/home/node/.n8n
     restart: unless-stopped
     depends_on:
