@@ -4,11 +4,14 @@ from faker import Faker
 from typing import Dict
 
 fake = Faker()
+fake.add_provider('faker.providers.internet')
 
 entity_mapping = {
-    "IP_ADDRESS": {},
+    "IPV4_ADDRESS": {},
+    "IPV6_ADDRESS": {},
     "EMAIL_ADDRESS": {},
-    "URL": {}
+    "URL": {},
+    "DOMAIN_NAME": {}
 }
 
 class LLMAnonymizer(Operator):
@@ -24,23 +27,31 @@ class LLMAnonymizer(Operator):
             return mapping[text]
 
         # Genera nuovo valore finto
-        if entity_type == "IP_ADDRESS":
+        if entity_type == "IPV4_ADDRESS":
             new_value = fake.ipv4()
+        elif entity_type == "IPV6_ADDRESS":
+            new_value = fake.ipv6()
         elif entity_type == "EMAIL_ADDRESS":
             new_value = fake.email()
         elif entity_type == "URL":
             new_value = fake.url()
+        elif entity_type == "DOMAIN_NAME":
+            new_value = fake.domain_name()
         else:
             new_value = "<ANONYMIZED>"
 
         # Evita duplicati
         while new_value in mapping.values():
-            if entity_type == "IP_ADDRESS":
+            if entity_type == "IPV4_ADDRESS":
                 new_value = fake.ipv4()
+            elif entity_type == "IPV6_ADDRESS":
+                new_value = fake.ipv6()
             elif entity_type == "EMAIL_ADDRESS":
                 new_value = fake.email()
             elif entity_type == "URL":
                 new_value = fake.url()
+            elif entity_type == "DOMAIN_NAME":
+                new_value = fake.domain_name()
 
         mapping[text] = new_value
         return new_value

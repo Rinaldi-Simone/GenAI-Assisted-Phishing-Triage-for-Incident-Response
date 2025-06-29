@@ -42,7 +42,7 @@ services:
       - cortex
 
   presidio-analyzer:
-    image: mcr.microsoft.com/presidio-analyzer:latest
+    build: ./presidio/analyzers
     container_name: presidio-analyzer
     ports:
       - "5002:3000"
