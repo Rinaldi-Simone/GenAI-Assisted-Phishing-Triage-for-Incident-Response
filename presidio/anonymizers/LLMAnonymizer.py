@@ -11,7 +11,8 @@ entity_mapping = {
     "IPV6_ADDRESS": {},
     "EMAIL_ADDRESS": {},
     "URL": {},
-    "DOMAIN_NAME": {}
+    "DOMAIN_NAME": {},
+    "DATE_TIME" : {}
 }
 
 class LLMAnonymizer(Operator):
@@ -37,6 +38,8 @@ class LLMAnonymizer(Operator):
             new_value = fake.url()
         elif entity_type == "DOMAIN_NAME":
             new_value = fake.domain_name()
+        elif entity_type == "DATE_TIME":
+            new_value = fake.date()
         else:
             new_value = "<ANONYMIZED>"
 
@@ -52,6 +55,8 @@ class LLMAnonymizer(Operator):
                 new_value = fake.url()
             elif entity_type == "DOMAIN_NAME":
                 new_value = fake.domain_name()
+            elif entity_type == "DATE_TIME":
+                new_value = fake.date()
 
         mapping[text] = new_value
         return new_value
