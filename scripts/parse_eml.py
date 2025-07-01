@@ -1,58 +1,112 @@
 import sys
 import json
 import re
-from email import policy
-from email.parser import BytesParser
+import ipaddress
 from urllib.parse import urlparse
 
-# Estensioni che indicano una risorsa statica (non HTML)
+import mailparser
+from bs4 import BeautifulSoup
+
+# Estensioni considerate risorsa statica
 STATIC_EXTENSIONS = (
     '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg',
     '.webp', '.css', '.js', '.ico', '.woff', '.woff2', '.ttf', '.eot'
 )
 
+def clean_text(text: str) -> str:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return ' '.join(lines)
+
 def extract_iocs(text):
     urls = re.findall(r'https?://[^\s<>"\']+', text)
     emails = re.findall(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b', text, re.I)
+    
+    ipv4 = re.findall(
+        r"\b(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
+        r"\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
+        r"\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
+        r"\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b", text)
 
-    ipv4_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
-    ipv6_pattern = r'\b(?:[A-F0-9]{1,4}:){1,7}[A-F0-9]{1,4}\b'
+    # Regex migliorato per IPv6 con word boundaries e validazione più rigorosa
+    # Pattern che cerca sequenze di gruppi esadecimali separati da :
+    # Con controllo che non siano preceduti o seguiti da altri caratteri alfanumerici
+    ipv6_pattern = r'(?<![a-fA-F0-9])(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{1,4}(?![a-fA-F0-9])'
+    ipv6_candidates = re.findall(ipv6_pattern, text)
+    
+    # Trova anche indirizzi IPv6 compressi (con ::)
+    ipv6_compressed_pattern = r'(?<![a-fA-F0-9])(?:[0-9a-fA-F]{0,4}::?){1,7}[0-9a-fA-F]{0,4}(?![a-fA-F0-9])'
+    ipv6_compressed = re.findall(ipv6_compressed_pattern, text)
+    
+    # Combina tutti i candidati IPv6
+    all_ipv6_candidates = ipv6_candidates + ipv6_compressed
 
-    ipv4 = re.findall(ipv4_pattern, text)
-    ipv6 = re.findall(ipv6_pattern, text, re.I)
+    # Validazione rigorosa con ipaddress e filtri aggiuntivi
+    ipv6 = []
+    for ip in all_ipv6_candidates:
+        # Salta se troppo corto o se non contiene abbastanza ":"
+        if len(ip) < 3 or ip.count(':') < 2:
+            continue
+            
+        # Salta se contiene solo numeri (potrebbe essere parte di un numero più grande)
+        if re.match(r'^[0-9]+:[0-9]+$', ip):
+            continue
+            
+        try:
+            # Verifica che sia un indirizzo IPv6 valido
+            ipaddress.IPv6Address(ip)
+            # Controlla che non sia un indirizzo di loopback semplice come "::1"
+            # a meno che non sia effettivamente ::1
+            if ip != "::1" and re.match(r'^::?[0-9]$', ip):
+                continue
+            ipv6.append(ip)
+        except ValueError:
+            continue
 
-    # Separazione URL
-    normal_urls = []
-    static_urls = []
+    # Classifica URL statici
+    normal_urls, static_urls = set(), set()
     for url in urls:
-        path = urlparse(url).path.lower()
-        if path.endswith(STATIC_EXTENSIONS):
-            static_urls.append(url)
-        else:
-            normal_urls.append(url)
+        ext = urlparse(url).path.lower()
+        (static_urls if ext.endswith(STATIC_EXTENSIONS) else normal_urls).add(url)
 
-    return normal_urls, static_urls, emails, ipv4, ipv6
+    return (
+        list(normal_urls),
+        list(static_urls),
+        list(set(emails)),
+        list(set(ipv4)),
+        list(set(ipv6))
+    )
 
-# Lettura e parsing dell’email
-with open(sys.argv[1], 'rb') as f:
-    msg = BytesParser(policy=policy.default).parse(f)
+# Parsing della mail
+mail = mailparser.parse_from_file(sys.argv[1])
+headers = mail.headers
 
-headers = dict(msg.items())
-header_text = "\n".join(f"{k}: {v}" for k, v in headers.items())
+# Estratti HTML e Plain
+body_html = "\n".join(mail.text_html) if mail.text_html else ""
+body_plain_raw = "\n".join(mail.text_plain) if mail.text_plain else ""
 
-body = msg.get_body(preferencelist=('plain', 'html'))
-text = body.get_content() if body else ''
-combined_text = f"{header_text}\n\n{text}"
+# Estratto HTML → testo
+body_plain_html = ""
+if body_html:
+    soup = BeautifulSoup(body_html, 'html.parser')
+    body_plain_html = soup.get_text(separator='\n', strip=True)
 
-normal_urls, static_urls, emails, ipv4, ipv6 = extract_iocs(combined_text)
+# Pulisce testi
+body_plain = clean_text(body_plain_raw)
+body_plain_html = clean_text(body_plain_html)
 
-# Output finale
+# IOC
+combined = "\n".join(f"{k}: {v}" for k, v in headers.items()) + "\n\n" + body_plain
+normal_urls, static_urls, emails, ipv4, ipv6 = extract_iocs(combined)
+
+# Output JSON
 output = {
-    "subject": msg['subject'],
-    "from": msg['from'],
-    "to": msg['to'],
+    "subject": mail.subject,
+    "from": mail.from_,
+    "to": mail.to,
     "headers": headers,
-    "body": text,
+    "body_html": body_html,
+    "body_plain": body_plain,
+    "body_plain_html": body_plain_html,
     "iocs": {
         "urls_normal": normal_urls,
         "urls_static": static_urls,
