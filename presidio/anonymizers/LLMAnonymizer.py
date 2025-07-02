@@ -6,13 +6,15 @@ from typing import Dict
 fake = Faker()
 fake.add_provider('faker.providers.internet')
 
+MAX_ENTRIES = 1000
+
 entity_mapping = {
     "IPV4_ADDRESS": {},
     "IPV6_ADDRESS": {},
     "EMAIL_ADDRESS": {},
     "URL": {},
     "DOMAIN_NAME": {},
-    "DATE_TIME" : {}
+    "DATE_TIME": {},
 }
 
 class LLMAnonymizer(Operator):
@@ -23,9 +25,16 @@ class LLMAnonymizer(Operator):
 
         mapping = entity_mapping[entity_type]
 
-        # Se già sostituito, ritorna la versione finta
-        if text in mapping:
-            return mapping[text]
+        # Reset mapping se troppo grande
+        if len(mapping) > MAX_ENTRIES:
+            mapping.clear()
+
+        # Normalizza il testo per evitare duplicati tipo "www.Example.com/" vs "example.com"
+        normalized_text = text.lower().strip().rstrip("/")
+
+        # Se già presente, restituisci il valore fittizio esistente
+        if normalized_text in mapping:
+            return mapping[normalized_text]
 
         # Genera nuovo valore finto
         if entity_type == "IPV4_ADDRESS":
@@ -43,8 +52,10 @@ class LLMAnonymizer(Operator):
         else:
             new_value = "<ANONYMIZED>"
 
-        # Evita duplicati
-        while new_value in mapping.values():
+        # Evita duplicati nel mapping
+        existing_values = set(mapping.values())
+        attempts = 0
+        while new_value in existing_values and attempts < 5:
             if entity_type == "IPV4_ADDRESS":
                 new_value = fake.ipv4()
             elif entity_type == "IPV6_ADDRESS":
@@ -57,8 +68,11 @@ class LLMAnonymizer(Operator):
                 new_value = fake.domain_name()
             elif entity_type == "DATE_TIME":
                 new_value = fake.date()
+            else:
+                new_value = "<ANONYMIZED>"
+            attempts += 1
 
-        mapping[text] = new_value
+        mapping[normalized_text] = new_value
         return new_value
 
     def validate(self, params: Dict) -> None:
