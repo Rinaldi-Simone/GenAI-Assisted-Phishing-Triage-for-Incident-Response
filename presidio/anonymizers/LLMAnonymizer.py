@@ -4,7 +4,9 @@ from faker import Faker
 from typing import Dict
 
 fake = Faker()
-fake.add_provider('faker.providers.internet')
+fake_internet = Faker()
+fake_internet.add_provider('faker.providers.internet')
+
 
 MAX_ENTRIES = 1000
 
@@ -46,7 +48,7 @@ class LLMAnonymizer(Operator):
         elif entity_type == "URL":
             new_value = fake.url()
         elif entity_type == "DOMAIN_NAME":
-            new_value = fake.domain_name()
+            new_value = fake_internet.domain_name()
         elif entity_type == "DATE_TIME":
             new_value = fake.date()
         else:
@@ -65,7 +67,7 @@ class LLMAnonymizer(Operator):
             elif entity_type == "URL":
                 new_value = fake.url()
             elif entity_type == "DOMAIN_NAME":
-                new_value = fake.domain_name()
+                new_value = fake_internet.domain_name()
             elif entity_type == "DATE_TIME":
                 new_value = fake.date()
             else:

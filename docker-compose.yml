@@ -46,6 +46,8 @@ services:
     container_name: presidio-analyzer
     ports:
       - "5002:3000"
+    volumes:
+      - models:/root/.cache
 
   presidio-anonymizer:
     build: ./presidio/anonymizers
@@ -55,3 +57,4 @@ services:
 
 volumes:
   n8n_data:
+  models:
