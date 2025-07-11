@@ -1,0 +1,19 @@
+services:
+  presidio-analyzer:
+    build: ./analyzers  
+    container_name: presidio-analyzer
+    ports:
+      - "5002:3000"
+    volumes:
+      - models:/root/.cache
+    restart: unless-stopped
+
+  presidio-anonymizer:
+    build: ./anonymizers
+    container_name: presidio-anonymizer
+    ports:
+      - "5001:3000"
+    restart: unless-stopped
+
+volumes:
+  models:
